@@ -1,41 +1,83 @@
-var createError = require('http-errors');
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
+require("dotenv").config();
 
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
+const isProduction = process.env.NODE_ENV === "production";
+const express = require("express");
+const path = require("path");
+const logger = require("morgan");
+const helmet = require("helmet");
+const cors = require("cors");
+const compression = require("compression");
+const errorhandler = require("errorhandler");
+const cookieParser = require("cookie-parser");
+const routes = require("./server/routes/routes");
+const app = express();
+const corsOptions = {
+  origin: "https://share-meal.herokuapp.com/",
+};
 
-var app = express();
-
-// view engine setup
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'jade');
-
-app.use(logger('dev'));
+app.use(logger("dev")), app.use(helmet());
+app.use(cors(corsOptions));
+app.use(compression());
 app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.resolve(__dirname, "public")));
 
-app.use('/', indexRouter);
-app.use('/users', usersRouter);
+if (!isProduction) {
+  app.use(errorhandler());
+}
 
-// catch 404 and forward to error handler
-app.use(function(req, res, next) {
-  next(createError(404));
+/* db.sequelize.sync({ force: true }).then(() => {
+  console.log("Re-Sync Database");
+}); */
+
+app.use("/", routes);
+
+app.get("/*", (req, res, next) => {
+  res.status(200).sendFile(path.join(__dirname, "public", "index.html"));
+  next();
 });
 
-// error handler
-app.use(function(err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+/* app.all("/*", (req, res) => {
+  res.status(200).sendFile(path.join(__dirname, "public", "index.html"));
+}); */
 
-  // render the error page
+/// catch 404 and forward to error handler
+app.use(function (req, res, next) {
+  const err = new Error("Not Found");
+  err.status = 404;
+  next(err);
+});
+
+/// error handlers
+
+// development error handler
+// will print stacktrace
+if (!isProduction) {
+  app.use(function (err, req, res, next) {
+    console.log(err.stack);
+
+    res.status(err.status || 500);
+
+    res.json({
+      errors: {
+        message: err.message,
+        error: err,
+      },
+    });
+  });
+}
+
+// production error handler
+// no stacktraces leaked to user
+app.use(function (err, req, res, next) {
   res.status(err.status || 500);
-  res.render('error');
+  res.json({
+    errors: {
+      message: err.message,
+      error: {},
+    },
+  });
 });
 
 module.exports = app;
